@@ -1,12 +1,12 @@
 import numpy as np
 
-def state_trans(i, j, gird_edge_length):
+def state_trans(i, j, grid_edge_length):
     # 状态索引是从1开始到25. 如果从0到24，则不加1
-    return i * gird_edge_length + j + 1
+    return i * grid_edge_length + j + 1
 
-def get_fbd_tgt_nor_state_reward(next_i, next_j, gird_edge_length, forbidden_state, tgt_state=18, r_normal=0, r_forbid=-1, r_tgt=1):
+def get_fbd_tgt_nor_state_reward(next_i, next_j, grid_edge_length, forbidden_state, tgt_state=18, r_normal=0, r_forbid=-1, r_tgt=1):
 
-    state = state_trans(next_i, next_j, gird_edge_length)
+    state = state_trans(next_i, next_j, grid_edge_length)
 
     if state in forbidden_state:
         return r_forbid
@@ -18,7 +18,7 @@ def get_fbd_tgt_nor_state_reward(next_i, next_j, gird_edge_length, forbidden_sta
         return r_normal
 
 
-def get_state_reward(i, j, a, gird_edge_length, forbidden_state, tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1):
+def get_state_reward(i, j, a, grid_edge_length, forbidden_state, tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1):
     """
     网格世界中的坐标以左上角为(0, 0)
     """
@@ -26,7 +26,7 @@ def get_state_reward(i, j, a, gird_edge_length, forbidden_state, tgt_state=18, r
     i_j_dic = {0: (i-1, j), 1: (i, j+1), 2: (i+1, j), 3: (i, j-1), 4: (i, j)}
 
     next_i, next_j = i_j_dic[a]
-    fbd_tgt_nor_state_reward = get_fbd_tgt_nor_state_reward(next_i, next_j, gird_edge_length, forbidden_state, tgt_state=tgt_state, 
+    fbd_tgt_nor_state_reward = get_fbd_tgt_nor_state_reward(next_i, next_j, grid_edge_length, forbidden_state, tgt_state=tgt_state, 
                                                 r_normal=r_normal, r_forbid=r_forbid, r_tgt=r_tgt)
     # up, row - 1
     if a == 0:
@@ -37,15 +37,15 @@ def get_state_reward(i, j, a, gird_edge_length, forbidden_state, tgt_state=18, r
             return next_i, next_j, fbd_tgt_nor_state_reward
     # right, col + 1
     if a == 1:
-        if next_j >= gird_edge_length:
-            return next_i, min(next_j, gird_edge_length - 1), r_bound
+        if next_j >= grid_edge_length:
+            return next_i, min(next_j, grid_edge_length - 1), r_bound
         
         else:
             return next_i, next_j, fbd_tgt_nor_state_reward
     # down, i + 1
     if a == 2:
-        if next_i >= gird_edge_length:
-            return min(next_i, gird_edge_length - 1), next_j, r_bound
+        if next_i >= grid_edge_length:
+            return min(next_i, grid_edge_length - 1), next_j, r_bound
         
         else:
             return next_i, next_j, fbd_tgt_nor_state_reward
@@ -62,21 +62,31 @@ def get_state_reward(i, j, a, gird_edge_length, forbidden_state, tgt_state=18, r
 
 
 # 生成一个episode
-def gen_episode(pi, episode_length, gird_edge_length, forbidden_state, tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa"):
+def gen_episode(pi, episode_length, grid_edge_length, forbidden_state, tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa", init_pos=None, end_pos=None, max_len=2000):
     """
     mode: sarsa, sars, srs 
+    
+    当end_pos存在, 则episode_length不起作用
     """
     episode = []
-    i, j  = np.random.randint(0, gird_edge_length), np.random.randint(0, gird_edge_length)
-    for t in range(episode_length):
-   
+    # init
+    if init_pos is None:
+        i, j  = np.random.randint(0, grid_edge_length), np.random.randint(0, grid_edge_length)
+    else:
+        i, j = init_pos
+
+    t = 0
+    cnt = 0
+    while cnt < episode_length:
+        
         # 二维坐标转换为一维索引
-        s = state_trans(i, j, gird_edge_length)
+        s = state_trans(i, j, grid_edge_length)
         if t == 0:
             a = np.random.choice([0, 1, 2, 3, 4], p=pi[s - 1])
 
-        i, j, r = get_state_reward(i, j, a, gird_edge_length, forbidden_state, tgt_state, r_normal, r_bound, r_forbid, r_tgt)
-        next_s = state_trans(i, j, gird_edge_length)
+        i, j, r = get_state_reward(i, j, a, grid_edge_length, forbidden_state, tgt_state, r_normal, r_bound, r_forbid, r_tgt)
+        next_s = state_trans(i, j, grid_edge_length)
+
         next_a = np.random.choice([0, 1, 2, 3, 4], p=pi[next_s - 1])
         
         if mode == "sarsa":
@@ -102,22 +112,30 @@ def gen_episode(pi, episode_length, gird_edge_length, forbidden_state, tgt_state
 
         else:
             raise Exception("Mode Error!")
+        
         s = next_s
         a = next_a
+
+        if end_pos is not None:
+            cnt -= 1
+            if s == state_trans(end_pos[0], end_pos[1], grid_edge_length) or t > max_len:
+                return episode
+        cnt += 1    
+        t += 1
     return episode
 
 
 # 生成多个episode
-def gen_multi_episodes(n_episodes, pi, episode_length, gird_edge_length, forbidden_state, 
-                      tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa"):
+def gen_multi_episodes(n_episodes, pi, episode_length, grid_edge_length, forbidden_state, 
+                      tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa", init_pos=None, end_pos=None, max_len=2000):
 
     """
     mode: sarsa, sars, srs
     """
     multi_episodes = []
     for n in range(n_episodes):
-        multi_episodes.append(gen_episode(pi, episode_length, gird_edge_length, forbidden_state, 
-                                              tgt_state, r_normal, r_bound, r_forbid, r_tgt, mode))
+        multi_episodes.append(gen_episode(pi, episode_length, grid_edge_length, forbidden_state, 
+                                              tgt_state, r_normal, r_bound, r_forbid, r_tgt, mode, init_pos, end_pos, max_len))
     return multi_episodes
 
 if __name__ == "__main__":
@@ -129,15 +147,15 @@ if __name__ == "__main__":
     n_actions = 5
     state_length = 5
     n_state = ground_truth.size    
-    forbidden_state = [7, 8, 13, 17, 18, 19, 22]     
+    forbidden_state = [7, 8, 13, 17, 19, 22]     
     # pi's shape: (25, 5)
     pi = np.zeros(shape=(n_state, n_actions)) + 0.2
     r_forbidden = r_bound = -1
     r_normal = 0
     r_target = 1
     gamma = 0.9
-    episodes = gen_multi_episodes(500, pi, 500, 5, forbidden_state, mode="srs")
-    print(episodes)
-
-    # episodes = gen_episode(pi, 500, 5, forbidden_state, mode="srs")
+    # episodes = gen_multi_episodes(500, pi, 500, 5, forbidden_state, mode="srs")
     # print(episodes)
+
+    episodes = gen_episode(pi, 10, 5, forbidden_state, mode="sarsa", init_pos=(0,0), end_pos=(3,2))
+    print(episodes)

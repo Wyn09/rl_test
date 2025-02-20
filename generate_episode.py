@@ -1,12 +1,15 @@
 import numpy as np
 
-def state_trans(i, j, grid_edge_length):
+def trans_state2index(i, j, grid_edge_length):
+    """
+    一维坐标转换为二维索引, index = (1~25)
+    """
     # 状态索引是从1开始到25. 如果从0到24，则不加1
     return i * grid_edge_length + j + 1
 
 def get_fbd_tgt_nor_state_reward(next_i, next_j, grid_edge_length, forbidden_state, tgt_state=18, r_normal=0, r_forbid=-1, r_tgt=1):
 
-    state = state_trans(next_i, next_j, grid_edge_length)
+    state = trans_state2index(next_i, next_j, grid_edge_length)
 
     if state in forbidden_state:
         return r_forbid
@@ -80,12 +83,12 @@ def gen_episode(pi, episode_length, grid_edge_length, forbidden_state, tgt_state
     while cnt < episode_length:
         
         # 二维坐标转换为一维索引
-        s = state_trans(i, j, grid_edge_length)
+        s = trans_state2index(i, j, grid_edge_length)
         if t == 0:
             a = np.random.choice([0, 1, 2, 3, 4], p=pi[s - 1])
 
         i, j, r = get_state_reward(i, j, a, grid_edge_length, forbidden_state, tgt_state, r_normal, r_bound, r_forbid, r_tgt)
-        next_s = state_trans(i, j, grid_edge_length)
+        next_s = trans_state2index(i, j, grid_edge_length)
 
         next_a = np.random.choice([0, 1, 2, 3, 4], p=pi[next_s - 1])
         
@@ -118,7 +121,7 @@ def gen_episode(pi, episode_length, grid_edge_length, forbidden_state, tgt_state
 
         if end_pos is not None:
             cnt -= 1
-            if s == state_trans(end_pos[0], end_pos[1], grid_edge_length) or t > max_len:
+            if s == trans_state2index(end_pos[0], end_pos[1], grid_edge_length) or t > max_len:
                 return episode
         cnt += 1    
         t += 1

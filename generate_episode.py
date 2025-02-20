@@ -125,7 +125,7 @@ def gen_episode(pi, episode_length, grid_edge_length, forbidden_state, tgt_state
                 return episode
         cnt += 1    
         t += 1
-    return episode
+    return np.asarray(episode)
 
 
 # 生成多个episode
@@ -139,7 +139,7 @@ def gen_multi_episodes(n_episodes, pi, episode_length, grid_edge_length, forbidd
     for n in range(n_episodes):
         multi_episodes.append(gen_episode(pi, episode_length, grid_edge_length, forbidden_state, 
                                               tgt_state, r_normal, r_bound, r_forbid, r_tgt, mode, init_pos, end_pos, max_len))
-    return multi_episodes
+    return np.asarray(multi_episodes)
 
 if __name__ == "__main__":
     ground_truth = np.array([[-3.8, -3.8, -3.6, -3.1, -3.2],
@@ -157,8 +157,8 @@ if __name__ == "__main__":
     r_normal = 0
     r_target = 1
     gamma = 0.9
-    # episodes = gen_multi_episodes(500, pi, 500, 5, forbidden_state, mode="srs")
-    # print(episodes)
-
-    episodes = gen_episode(pi, 10, 5, forbidden_state, mode="sarsa", init_pos=(0,0), end_pos=(3,2))
+    episodes = gen_multi_episodes(2, pi, 10, 5, forbidden_state, mode="srs")
     print(episodes)
+
+    # episodes = gen_episode(pi, 10, 5, forbidden_state, mode="sarsa", init_pos=(0,0), end_pos=(3,2))
+    # print(episodes)

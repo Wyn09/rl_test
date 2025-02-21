@@ -10,9 +10,9 @@ def trans_state2index(i, j, grid_edge_length):
 def get_fbd_tgt_nor_state_reward(next_i, next_j, grid_edge_length, forbidden_state, tgt_state=18, r_normal=0, r_forbid=-1, r_tgt=1):
 
     state = trans_state2index(next_i, next_j, grid_edge_length)
-
-    if state in forbidden_state:
-        return r_forbid
+    if forbidden_state is not None:
+        if state in forbidden_state:
+            return r_forbid
     
     elif state == tgt_state:
         return r_tgt
@@ -65,7 +65,7 @@ def get_state_reward(i, j, a, grid_edge_length, forbidden_state, tgt_state=18, r
 
 
 # 生成一个episode
-def gen_episode(pi, episode_length, grid_edge_length, forbidden_state, tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa", init_pos=None, end_pos=None, max_len=2000):
+def gen_episode(pi, episode_length, grid_edge_length, forbidden_state=None, tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa", init_pos=None, end_pos=None, max_len=2000):
     """
     mode: sarsa, sars, srs 
     
@@ -129,7 +129,7 @@ def gen_episode(pi, episode_length, grid_edge_length, forbidden_state, tgt_state
 
 
 # 生成多个episode
-def gen_multi_episodes(n_episodes, pi, episode_length, grid_edge_length, forbidden_state, 
+def gen_multi_episodes(n_episodes, pi, episode_length, grid_edge_length, forbidden_state=None, 
                       tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa", init_pos=None, end_pos=None, max_len=2000):
 
     """

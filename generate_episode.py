@@ -14,11 +14,10 @@ def get_fbd_tgt_nor_state_reward(next_i, next_j, grid_edge_length, forbidden_sta
         if state in forbidden_state:
             return r_forbid
     
-    elif state == tgt_state:
+    if state == tgt_state:
         return r_tgt
 
-    else:
-        return r_normal
+    return r_normal
 
 
 def get_state_reward(i, j, a, grid_edge_length, forbidden_state, tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1):
@@ -65,10 +64,10 @@ def get_state_reward(i, j, a, grid_edge_length, forbidden_state, tgt_state=18, r
 
 
 # 生成一个episode
-def gen_episode(pi, episode_length, grid_edge_length, forbidden_state=None, tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa", init_pos=None, end_pos=None, max_len=2000):
+def gen_grid_episode_old(pi, grid_edge_length, episode_length=1, forbidden_state=None, tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa", init_pos=None, end_pos=None, max_len=2000):
     """
-    mode: sarsa, sars, srs 
-    
+    old指mode只能指定固定模式  
+    mode: sarsa, sars, srs   
     当end_pos存在, 则episode_length不起作用
     """
     episode = []
@@ -128,8 +127,88 @@ def gen_episode(pi, episode_length, grid_edge_length, forbidden_state=None, tgt_
     return np.asarray(episode)
 
 
+# 生成一个episode
+def gen_grid_episode(pi, grid_edge_length, episode_length=1, forbidden_state=None, tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa", init_pos=None, end_pos=None, max_len=2000):
+    """
+    可指定任意模式  
+    当end_pos存在, 则episode_length不起作用
+    """
+    episode = []
+
+    # init
+    if init_pos is None:
+        i, j  = np.random.randint(0, grid_edge_length), np.random.randint(0, grid_edge_length)
+    else:
+        i, j = init_pos
+
+    t = 0
+    cnt = 0
+    s = a = r = None
+    while cnt < episode_length:
+        # sign用来判断trajectory里是否存在s和a，以便t + 1
+        s_sign = False
+        a_sigh = False
+        trajectory = []
+        for step, c in enumerate(mode):
+            # cnt用来判断是不是第一个trajectory
+            # step用来判断是不是第一个s
+            if cnt == 0:
+                if step == 0 and c == "s":
+                    # 二维坐标转换为一维索引
+                    s = trans_state2index(i, j, grid_edge_length)
+                    a = np.random.choice([0, 1, 2, 3, 4], p=pi[s - 1])
+                    i, j, r = get_state_reward(i, j, a, grid_edge_length, forbidden_state, tgt_state, r_normal, r_bound, r_forbid, r_tgt)
+
+                # 当前不是第一个s
+                elif step != 0 and c == "s":
+                    s = trans_state2index(i, j, grid_edge_length)
+                    a = np.random.choice([0, 1, 2, 3, 4], p=pi[s - 1])
+                    i, j, r = get_state_reward(i, j, a, grid_edge_length, forbidden_state, tgt_state, r_normal, r_bound, r_forbid, r_tgt)
+
+            # 当前不是第一个trajectory
+            else:
+                # 当前不是第一个s
+                if step != 0 and c == "s":
+                    s = trans_state2index(i, j, grid_edge_length)
+                    a = np.random.choice([0, 1, 2, 3, 4], p=pi[s - 1])
+                    i, j, r = get_state_reward(i, j, a, grid_edge_length, forbidden_state, tgt_state, r_normal, r_bound, r_forbid, r_tgt)
+
+
+
+
+
+
+
+
+            if s_sign and a_sigh:
+                s_sign = a_sigh = False
+                t += 1
+
+            if c == "s":
+                s_sign = True
+                trajectory.append(f"{c}{t}_{s}")
+            elif c == "a":
+                a_sigh = True
+                trajectory.append(f"{c}{t}_{a}")
+            elif c == "r":
+                trajectory.append(f"{c}{t}_{r}")
+           
+
+        trajectory = tuple(trajectory)
+        episode.append(trajectory)
+
+        if end_pos is not None:
+            cnt -= 1
+            if s == trans_state2index(end_pos[0], end_pos[1], grid_edge_length) or t > max_len:
+                return episode
+        cnt += 1    
+    return np.asarray(episode)
+
+
+
+
 # 生成多个episode
-def gen_multi_episodes(n_episodes, pi, episode_length, grid_edge_length, forbidden_state=None, 
+def gen_multi_grid_episodes(n_episodes, pi, grid_edge_length, episode_length=1, forbidden_state=None, 
                       tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa", init_pos=None, end_pos=None, max_len=2000):
 
     """
@@ -137,7 +216,7 @@ def gen_multi_episodes(n_episodes, pi, episode_length, grid_edge_length, forbidd
     """
     multi_episodes = []
     for n in range(n_episodes):
-        multi_episodes.append(gen_episode(pi, episode_length, grid_edge_length, forbidden_state, 
+        multi_episodes.append(gen_grid_episode(pi, grid_edge_length, episode_length, forbidden_state, 
                                               tgt_state, r_normal, r_bound, r_forbid, r_tgt, mode, init_pos, end_pos, max_len))
     return np.asarray(multi_episodes)
 
@@ -157,8 +236,15 @@ if __name__ == "__main__":
     r_normal = 0
     r_target = 1
     gamma = 0.9
-    episodes = gen_multi_episodes(2, pi, 10, 5, forbidden_state, mode="srs")
+    episodes = gen_multi_grid_episodes(2, pi, 5, 10, forbidden_state, mode="srs")
     print(episodes)
 
-    # episodes = gen_episode(pi, 10, 5, forbidden_state, mode="sarsa", init_pos=(0,0), end_pos=(3,2))
+    # episodes = gen_grid_episode(pi, 5, 10, forbidden_state, mode="sarsa", init_pos=(0,0), end_pos=(3,2))
+    # print(episodes)
+
+
+    # episodes = gen_grid_episode(pi, 5, 10, forbidden_state, mode="sarsa")
+    # print(episodes)
+
+    # episodes = gen_grid_episode(pi, 5, 10, forbidden_state, mode="sars")
     # print(episodes)

@@ -173,7 +173,8 @@ def gen_grid_episode(pi, grid_edge_length, episode_length=1, forbidden_state=Non
                     a = np.random.choice([0, 1, 2, 3, 4], p=pi[s - 1])
                     i, j, r = get_state_reward(i, j, a, grid_edge_length, forbidden_state, tgt_state, r_normal, r_bound, r_forbid, r_tgt)
 
-            if s_sign and a_sigh:
+            # 指定st at产生的reward记为 rt+1
+            if (s_sign and a_sigh) or (s_sign and c == "s"):
                 s_sign = a_sigh = False
                 t += 1
 
@@ -203,10 +204,11 @@ def gen_grid_episode(pi, grid_edge_length, episode_length=1, forbidden_state=Non
 # 生成多个episode
 def gen_multi_grid_episodes(n_episodes, pi, grid_edge_length, episode_length=1, forbidden_state=None, 
                       tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa", init_pos=None, end_pos=None, max_len=2000):
+    """
+    可指定任意模式
+    当end_pos存在, 则episode_length不起作用
+    """
 
-    """
-    mode: sarsa, sars, srs
-    """
     multi_episodes = []
     for n in range(n_episodes):
         multi_episodes.append(gen_grid_episode(pi, grid_edge_length, episode_length, forbidden_state, 
@@ -229,8 +231,9 @@ if __name__ == "__main__":
     r_normal = 0
     r_target = 1
     gamma = 0.9
-    episodes = gen_multi_grid_episodes(2, pi, 5, 10, forbidden_state, mode="srs")
-    print(episodes)
+
+    # episodes = gen_multi_grid_episodes(2, pi, 5, 10, forbidden_state, mode="srs")
+    # print(episodes)
 
     # episodes = gen_grid_episode(pi, 5, 10, forbidden_state, mode="sarsa", init_pos=(0,0), end_pos=(3,2))
     # print(episodes)
@@ -238,6 +241,9 @@ if __name__ == "__main__":
 
     # episodes = gen_grid_episode(pi, 5, 10, forbidden_state, mode="sarsa")
     # print(episodes)
-
-    # episodes = gen_grid_episode(pi, 5, 10, forbidden_state, mode="sars")
-    # print(episodes)
+        
+    episodes = gen_multi_grid_episodes(2, pi, 5, 10, forbidden_state, mode="sarsrs")
+    print(episodes)
+    
+    episodes = gen_multi_grid_episodes(2, pi, 5, 10, forbidden_state, mode="sarsas")
+    print(episodes)

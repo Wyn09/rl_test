@@ -173,13 +173,6 @@ def gen_grid_episode(pi, grid_edge_length, episode_length=1, forbidden_state=Non
                     a = np.random.choice([0, 1, 2, 3, 4], p=pi[s - 1])
                     i, j, r = get_state_reward(i, j, a, grid_edge_length, forbidden_state, tgt_state, r_normal, r_bound, r_forbid, r_tgt)
 
-
-
-
-
-
-
-
             if s_sign and a_sigh:
                 s_sign = a_sigh = False
                 t += 1

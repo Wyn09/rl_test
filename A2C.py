@@ -173,7 +173,6 @@ if __name__ =="__main__":
 
     critic = Critic().to(device)
     actor = Actor(n_actions).to(device)
-    criterion = nn.MSELoss()
     optimizer_critic = torch.optim.Adam(critic.parameters(), lr=alpha)
     optimizer_actor = torch.optim.Adam(actor.parameters(), lr=beta)
 

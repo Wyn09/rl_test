@@ -162,15 +162,13 @@ if __name__ =="__main__":
     gamma = 0.9
     alpha = 1e-3
     beta = 1e-3
-    epoch = 300
-    batch_szie = 2
+    epoch = 1000
+    batch_szie = 1024
     device = "cuda"
     error_ls = []
     G_ls = []
 
-    experience_samples = gen_grid_episode(pi=pi, episode_length=100, grid_edge_length=grid_edge_length, forbidden_state=forbidden_states, 
-                    tgt_state=tgt_state, r_normal=r_normal, r_bound=r_bound, r_forbid=r_forbid, r_tgt=r_tgt, 
-                    mode="sars", init_pos=(0,0))
+
 
 
     critic = Critic().to(device)
@@ -180,36 +178,43 @@ if __name__ =="__main__":
     optimizer_actor = torch.optim.Adam(actor.parameters(), lr=beta)
 
     # 初始化采样
+    experience_samples = gen_grid_episode(pi=pi, episode_length=batch_szie, grid_edge_length=grid_edge_length, forbidden_state=forbidden_states, 
+                tgt_state=tgt_state, r_normal=r_normal, r_bound=r_bound, r_forbid=r_forbid, r_tgt=r_tgt, 
+                mode="sars", init_pos=(0,0))
     data = get_random_sample(experience_samples, batch_szie)
     
     for e in range(epoch):
 
         s_t, a_t, r_next_t, s_next_t = data[:, 0:1], data[:, 1:2], data[:, 2:3], data[:, 3:4],
         s_t, a_t, r_next_t, s_next_t = s_t.to(device), a_t.to(device), r_next_t.to(device), s_next_t.to(device)
-        # TD error
-        v_t = critic(s_t)
-        v_next_t = critic(s_next_t)
-        yT = r_next_t + gamma * v_next_t
-        delta = v_t - yT
+        # TD-error(Advantege): targets - values
+        values = critic(s_t)
+        next_values = critic(s_next_t)
+        targets = r_next_t + gamma * next_values
 
         # value update
-        td_error = criterion(delta, torch.zeros_like(delta))
+        # 让values接近targets
+        critic_loss = F.mse_loss(values, targets.detach())
         optimizer_critic.zero_grad()
-        td_error.backward()
+        critic_loss.backward()
         optimizer_critic.step()
 
         # policy update
         out = actor(s_t)
-        error = criterion(delta.detach() * out, torch.zeros_like(delta * out))
+        log_probs = out.gather(-1, a_t.long())
+        advantege = targets.detach() - values.detach()
+        actor_loss = -(advantege * log_probs).mean()
         optimizer_actor.zero_grad()
-        error.backward()
+        actor_loss.backward()
         optimizer_actor.step()
-
-        # out.mean().backward()
-        # for weights in actor.parameters():
-        #     weights = weights - beta * delta  * weights.grad
-        #     weights.grad = None
             
-        print(f"epoch: {e+1}/{epoch}, TD Error: {delta.mean().item()}")
-    data = get_random_sample(experience_samples, batch_szie)
+        print(f"Epoch: {e+1}/{epoch}, TD Error: {critic_loss.mean().item():.6f}, Value: {values.mean().item():.6f}")
+
+        # 更新pi online
+        states = torch.tensor([s for s in range(n_states)], dtype=torch.float, device=device).unsqueeze(-1)
+        pi = torch.exp(actor(states)).detach().cpu().numpy()
+        experience_samples = gen_grid_episode(pi=pi, episode_length=batch_szie, grid_edge_length=grid_edge_length, forbidden_state=forbidden_states, 
+                tgt_state=tgt_state, r_normal=r_normal, r_bound=r_bound, r_forbid=r_forbid, r_tgt=r_tgt, 
+                mode="sars", init_pos=(0,0))
+        data = get_random_sample(experience_samples, batch_szie)
 

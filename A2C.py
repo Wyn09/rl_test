@@ -6,20 +6,32 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
+from collections import deque
 
 
 def get_num(item):
     return int(item.split("_")[-1])
 
-def trans_state2ij(item, grid_edge_length):
+def trans_state2ij(item, grid_edge_length=5):
     """
     把状态一维索引转换为二维索引, i,j = (0~24)
     """
-    state = get_num(item)
+    if isinstance(item, str):
+        state = get_num(item)
+    else:
+        state = item
     mod = state % grid_edge_length
     j = mod if mod != 0 else 5
     i = int(((state - j) / grid_edge_length) + 1)
     return (i-1, j-1)
+
+def batch_trans_state2ij(item):
+    """
+    输入为一维数组
+    """
+    item = np.vectorize(trans_state2ij)(item)
+    return  np.array(list(zip(item[0], item[1])))
+
 
 
 def visual_3d(data, z_min=-5, z_max=-2):
@@ -101,15 +113,12 @@ def get_random_sample(experience_samples, batch_szie):
 
     return torch.tensor(sars, dtype=torch.float)
 
-
-        
     
-
 class Critic(nn.Module):
     def __init__(self, hidden_size=128):
         super().__init__()
         self.seq = nn.Sequential(
-            nn.Linear(1, hidden_size),
+            nn.Linear(2, hidden_size),
             nn.LayerNorm(hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size),
@@ -126,7 +135,7 @@ class Actor(nn.Module):
         super().__init__()
 
         self.seq = nn.Sequential(
-            nn.Linear(1, hidden_size),
+            nn.Linear(2, hidden_size),
             nn.LayerNorm(hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size),
@@ -139,7 +148,17 @@ class Actor(nn.Module):
         return self.seq(s)
         pass
 
-
+class ReplayBuffer:
+    def __init__(self, capacity=10):
+        self.buffer = deque(maxlen=capacity)
+    
+    def add(self, transition):
+        self.buffer.append(transition)
+    
+    def sample(self, batch_size):
+        ids = np.random.choice(len(self.buffer[0]), batch_size)
+        return np.asarray(self.buffer[0])[ids]
+    
 
 if __name__ =="__main__":
 
@@ -157,63 +176,75 @@ if __name__ =="__main__":
     pi = np.zeros(shape=(n_states, n_actions)) + 0.2
     r_forbid = -10
     r_bound = -10
-    r_normal = 0
-    r_tgt = 1
+    r_normal = 2
+    r_tgt = 10
     gamma = 0.9
     alpha = 1e-3
     beta = 1e-3
-    epoch = 1000
-    batch_szie = 1024
+    epoch = 2000
+    batch_szie = 128
     device = "cuda"
     error_ls = []
     G_ls = []
-
-
-
+    capacity = 512
 
     critic = Critic().to(device)
     actor = Actor(n_actions).to(device)
     optimizer_critic = torch.optim.Adam(critic.parameters(), lr=alpha)
     optimizer_actor = torch.optim.Adam(actor.parameters(), lr=beta)
 
+    # 初始化Replay Buffer
+    rb = ReplayBuffer(capacity)
     # 初始化采样
     experience_samples = gen_grid_episode(pi=pi, episode_length=batch_szie, grid_edge_length=grid_edge_length, forbidden_state=forbidden_states, 
                 tgt_state=tgt_state, r_normal=r_normal, r_bound=r_bound, r_forbid=r_forbid, r_tgt=r_tgt, 
                 mode="sars", init_pos=(0,0))
-    data = get_random_sample(experience_samples, batch_szie)
     
+    rb.add(experience_samples)
     for e in range(epoch):
+        for _ in range(len(experience_samples) // batch_szie):
+            data = rb.sample(batch_szie)
 
-        s_t, a_t, r_next_t, s_next_t = data[:, 0:1], data[:, 1:2], data[:, 2:3], data[:, 3:4],
-        s_t, a_t, r_next_t, s_next_t = s_t.to(device), a_t.to(device), r_next_t.to(device), s_next_t.to(device)
-        # TD-error(Advantege): targets - values
-        values = critic(s_t)
-        next_values = critic(s_next_t)
-        targets = r_next_t + gamma * next_values
+            # 把状态索引转换为二维
+            s_t = batch_trans_state2ij(data[:, 0])
+            a_t = np.vectorize(get_num)(data[:, 1:2])
+            r_next_t = np.vectorize(get_num)(data[:, 2:3])
+            s_next_t = batch_trans_state2ij(data[:, 3])
 
-        # value update
-        # 让values接近targets
-        critic_loss = F.mse_loss(values, targets.detach())
-        optimizer_critic.zero_grad()
-        critic_loss.backward()
-        optimizer_critic.step()
+            s_t = torch.tensor(s_t, dtype=torch.float, device=device)
+            a_t = torch.tensor(a_t, dtype=torch.float, device=device)
+            r_next_t = torch.tensor(r_next_t, dtype=torch.float, device=device)
+            s_next_t = torch.tensor(s_next_t, dtype=torch.float, device=device)
 
-        # policy update
-        out = actor(s_t)
-        log_probs = out.gather(-1, a_t.long())
-        advantege = targets.detach() - values.detach()
-        actor_loss = -(advantege * log_probs).mean()
-        optimizer_actor.zero_grad()
-        actor_loss.backward()
-        optimizer_actor.step()
-            
-        print(f"Epoch: {e+1}/{epoch}, TD Error: {critic_loss.mean().item():.6f}, Value: {values.mean().item():.6f}")
+            # TD-error(Advantege): targets - values
+            values = critic(s_t)
+            next_values = critic(s_next_t)
+            targets = r_next_t + gamma * next_values
 
-        # 更新pi online
-        states = torch.tensor([s for s in range(n_states)], dtype=torch.float, device=device).unsqueeze(-1)
-        pi = torch.exp(actor(states)).detach().cpu().numpy()
-        experience_samples = gen_grid_episode(pi=pi, episode_length=batch_szie, grid_edge_length=grid_edge_length, forbidden_state=forbidden_states, 
-                tgt_state=tgt_state, r_normal=r_normal, r_bound=r_bound, r_forbid=r_forbid, r_tgt=r_tgt, 
-                mode="sars", init_pos=(0,0))
-        data = get_random_sample(experience_samples, batch_szie)
+            # value update
+            # 让values接近targets
+            critic_loss = F.mse_loss(values, targets.detach())
+            optimizer_critic.zero_grad()
+            critic_loss.backward()
+            optimizer_critic.step()
+
+            # policy update
+            out = actor(s_t)
+            log_probs = out.gather(-1, a_t.long())
+            advantege = targets.detach() - values.detach()
+            actor_loss = -(advantege * log_probs).mean()
+            optimizer_actor.zero_grad()
+            actor_loss.backward()
+            optimizer_actor.step()
+                
+            print(f"Epoch: {e+1}/{epoch}, TD Error: {critic_loss.mean().item():.15f}, Value: {values.mean().item():.15f}")
+
+            # 更新pi online
+            states = torch.tensor(batch_trans_state2ij(np.arange(1, 26)), dtype=torch.float, device=device)
+            pi = torch.exp(actor(states)).detach().cpu().numpy()
+            # 用更新后的 pi 生成新的数据
+            experience_samples = gen_grid_episode(pi=pi, episode_length=batch_szie, grid_edge_length=grid_edge_length, forbidden_state=forbidden_states, 
+                    tgt_state=tgt_state, r_normal=r_normal, r_bound=r_bound, r_forbid=r_forbid, r_tgt=r_tgt, 
+                    mode="sars", init_pos=(0,0))
+            rb.add(experience_samples)
 

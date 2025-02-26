@@ -128,11 +128,16 @@ def gen_grid_episode_old(pi, grid_edge_length, episode_length=1, forbidden_state
 
 
 # 生成一个episode
-def gen_grid_episode(pi, grid_edge_length, episode_length=1, forbidden_state=None, tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa", init_pos=None, end_pos=None, max_len=2000):
+def gen_grid_episode(pi=None, grid_edge_length=5, episode_length=1, forbidden_state=None, tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa", init_pos=None, end_pos=None, max_len=2000):
     """
     可指定任意模式  
     当end_pos存在, 则episode_length不起作用
     """
+
+    # 默认5*5网格 5个动作初始化均匀分布pi
+    if pi is None:
+        pi = np.zeros(shape=(grid_edge_length * grid_edge_length, 5)) + 0.2
+        
     episode = []
 
     # init
@@ -202,12 +207,15 @@ def gen_grid_episode(pi, grid_edge_length, episode_length=1, forbidden_state=Non
 
 
 # 生成多个episode
-def gen_multi_grid_episodes(n_episodes, pi, grid_edge_length, episode_length=1, forbidden_state=None, 
+def gen_multi_grid_episodes(n_episodes, pi=None, grid_edge_length=5, episode_length=1, forbidden_state=None, 
                       tgt_state=18, r_normal=0, r_bound=-1, r_forbid=-1, r_tgt=1, mode="sarsa", init_pos=None, end_pos=None, max_len=2000):
     """
     可指定任意模式
     当end_pos存在, 则episode_length不起作用
     """
+    # 默认5*5网格 5个动作初始化均匀分布pi
+    if pi is None:
+        pi = np.zeros(shape=(grid_edge_length * grid_edge_length, 5)) + 0.2
 
     multi_episodes = []
     for n in range(n_episodes):

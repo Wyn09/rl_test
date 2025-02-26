@@ -174,19 +174,19 @@ if __name__ =="__main__":
     tgt_state = 18    
     # pi's shape: (25, 5)
     pi = np.zeros(shape=(n_states, n_actions)) + 0.2
-    r_forbid = -10
-    r_bound = -10
-    r_normal = 2
-    r_tgt = 10
+    r_forbid = -1
+    r_bound = -1
+    r_normal = 0
+    r_tgt = 1
     gamma = 0.9
-    alpha = 1e-3
-    beta = 1e-3
-    epoch = 2000
-    batch_szie = 128
+    alpha = 1e-6
+    beta = 1e-6
+    epoch = 200
+    batch_szie = 256
     device = "cuda"
     error_ls = []
     G_ls = []
-    capacity = 512
+    capacity = 10000
 
     critic = Critic().to(device)
     actor = Actor(n_actions).to(device)
@@ -202,7 +202,7 @@ if __name__ =="__main__":
     
     rb.add(experience_samples)
     for e in range(epoch):
-        for _ in range(len(experience_samples) // batch_szie):
+        for _ in range((len(experience_samples) // batch_szie) + 1):
             data = rb.sample(batch_szie)
 
             # 把状态索引转换为二维
@@ -248,3 +248,12 @@ if __name__ =="__main__":
                     mode="sars", init_pos=(0,0))
             rb.add(experience_samples)
 
+
+
+    s2a = pi.argmax(-1)
+    a_dic = {0: "上", 1: "右", 2: "下", 3: "左", 4: "停", }
+    policy = [(s+1, a_dic[a]) for s, a in enumerate(s2a)]
+    print(policy)
+    print(pi)
+    episode = gen_grid_episode(pi=pi, init_pos=(0,0), end_pos=(3,2))
+    print(len(episode))
